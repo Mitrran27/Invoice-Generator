@@ -1,0 +1,315 @@
+openapi: 3.0.0
+info:
+  title: Invoice Generator API
+  version: 1.0.0
+  description: REST API for Invoice Generator — auth, invoices, settings, and email reminders.
+
+servers:
+  - url: http://localhost:5000/api
+    description: Local development
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+        created_at: { type: string, format: date-time }
+
+    InvoiceItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        description: { type: string }
+        rate: { type: number }
+        quantity: { type: number }
+
+    Invoice:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        invoice_number: { type: string }
+        client_name: { type: string }
+        client_email: { type: string }
+        client_address: { type: string }
+        issue_date: { type: string, format: date }
+        due_date: { type: string, format: date }
+        tax_percentage: { type: number }
+        notes: { type: string }
+        status:
+          type: string
+          enum: [paid, unpaid, overdue]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InvoiceItem'
+        created_at: { type: string, format: date-time }
+
+    CompanySettings:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        user_id: { type: string, format: uuid }
+        company_name: { type: string }
+        company_logo: { type: string }
+        company_address: { type: string }
+        phone: { type: string }
+        email: { type: string }
+        website: { type: string }
+        twitter: { type: string }
+        linkedin: { type: string }
+        facebook: { type: string }
+        default_currency: { type: string }
+        default_tax_percentage: { type: number }
+        bank_name: { type: string }
+        account_name: { type: string }
+        account_number: { type: string }
+        reminder_enabled: { type: boolean }
+        reminder_days_before: { type: integer }
+
+security:
+  - BearerAuth: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name: { type: string }
+                email: { type: string, format: email }
+                password: { type: string, minLength: 6 }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '409':
+          description: Email already registered
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      security: []
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token: { type: string }
+                  user: { $ref: '#/components/schemas/User' }
+        '401':
+          description: Invalid credentials
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Get current user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: '#/components/schemas/User' }
+
+  /invoices:
+    get:
+      tags: [Invoices]
+      summary: List all invoices for the current user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoices:
+                    type: array
+                    items: { $ref: '#/components/schemas/Invoice' }
+    post:
+      tags: [Invoices]
+      summary: Create a new invoice
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [invoiceNumber, clientName, issueDate, dueDate, items]
+              properties:
+                invoiceNumber: { type: string }
+                clientName: { type: string }
+                clientEmail: { type: string }
+                clientAddress: { type: string }
+                issueDate: { type: string, format: date }
+                dueDate: { type: string, format: date }
+                taxPercentage: { type: number }
+                notes: { type: string }
+                status: { type: string, enum: [paid, unpaid, overdue] }
+                items:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      description: { type: string }
+                      rate: { type: number }
+                      quantity: { type: number }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoice: { $ref: '#/components/schemas/Invoice' }
+
+  /invoices/{id}:
+    get:
+      tags: [Invoices]
+      summary: Get a single invoice
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invoice: { $ref: '#/components/schemas/Invoice' }
+        '404':
+          description: Not found
+
+    put:
+      tags: [Invoices]
+      summary: Update an invoice (replaces items)
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Invoice'
+      responses:
+        '200':
+          description: Updated
+    delete:
+      tags: [Invoices]
+      summary: Delete an invoice
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Deleted
+
+  /invoices/{id}/status:
+    patch:
+      tags: [Invoices]
+      summary: Update invoice status only
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [paid, unpaid, overdue] }
+      responses:
+        '200':
+          description: Updated
+
+  /invoices/{id}/duplicate:
+    post:
+      tags: [Invoices]
+      summary: Duplicate an invoice
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '201':
+          description: Duplicated invoice created
+
+  /settings:
+    get:
+      tags: [Settings]
+      summary: Get company settings for the current user
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  settings: { $ref: '#/components/schemas/CompanySettings' }
+    put:
+      tags: [Settings]
+      summary: Save company settings (upsert)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanySettings'
+      responses:
+        '200':
+          description: OK
