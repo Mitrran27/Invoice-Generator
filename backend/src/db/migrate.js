@@ -92,6 +92,47 @@ async function migrate() {
     `);
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS payment_receipts (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        invoice_id UUID NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+        upload_token VARCHAR(64) UNIQUE NOT NULL,
+        client_name VARCHAR(255) DEFAULT '',
+        client_email VARCHAR(255) DEFAULT '',
+        amount_paid NUMERIC(12,2) DEFAULT NULL,
+        currency VARCHAR(10) DEFAULT 'USD',
+        payment_method VARCHAR(100) DEFAULT '',
+        payment_date DATE DEFAULT NULL,
+        notes TEXT DEFAULT '',
+        file_url TEXT DEFAULT NULL,
+        file_name VARCHAR(255) DEFAULT NULL,
+        file_type VARCHAR(50) DEFAULT NULL,
+        file_data TEXT DEFAULT NULL,
+        status VARCHAR(20) DEFAULT 'pending_review' CHECK (status IN (
+          'pending_review','approved','rejected','mismatch'
+        )),
+        auto_status VARCHAR(20) DEFAULT NULL,
+        reviewer_notes TEXT DEFAULT '',
+        reviewed_at TIMESTAMPTZ DEFAULT NULL,
+        created_at TIMESTAMPTZ DEFAULT NOW(),
+        updated_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        invoice_id UUID REFERENCES invoices(id) ON DELETE CASCADE,
+        receipt_id UUID REFERENCES payment_receipts(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        message TEXT NOT NULL,
+        is_read BOOLEAN DEFAULT false,
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+
+    await client.query(`
       DO $migrate$ BEGIN
         BEGIN ALTER TABLE invoices ADD COLUMN partial_percentage NUMERIC(5,2) DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END;
         BEGIN ALTER TABLE invoices ADD COLUMN email_sent_at_1day TIMESTAMPTZ DEFAULT NULL; EXCEPTION WHEN duplicate_column THEN NULL; END;

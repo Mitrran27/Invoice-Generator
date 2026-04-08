@@ -37,6 +37,8 @@ export default function ViewInvoice() {
     return await html2canvas(printRef.current, {
       scale: 2, useCORS: true, backgroundColor: '#ffffff',
       width: A4_W, height: A4_H,
+      windowWidth: A4_W, windowHeight: A4_H,
+      logging: false,
     })
   }
 

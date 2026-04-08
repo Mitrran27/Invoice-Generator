@@ -2,14 +2,13 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import api from './api'
 
-// ─── Auth Store ──────────────────────────────────────────────────────────────
+// ─── Auth Store ───────────────────────────────────────────────────────────────
 export const useAuthStore = create(
   persist(
     (set, get) => ({
       user: null,
       token: null,
       isLoading: false,
-
       login: async (email, password) => {
         set({ isLoading: true })
         try {
@@ -23,7 +22,6 @@ export const useAuthStore = create(
           return { success: false, error: err.response?.data?.error || 'Login failed' }
         }
       },
-
       register: async (name, email, password) => {
         set({ isLoading: true })
         try {
@@ -37,19 +35,14 @@ export const useAuthStore = create(
           return { success: false, error: err.response?.data?.error || 'Registration failed' }
         }
       },
-
       logout: () => {
         localStorage.removeItem('invoice_token')
         localStorage.removeItem('invoice_user')
         set({ user: null, token: null })
       },
-
       isAuthenticated: () => !!get().token,
     }),
-    {
-      name: 'invoice-auth',
-      partialize: (state) => ({ user: state.user, token: state.token }),
-    }
+    { name: 'invoice-auth', partialize: (s) => ({ user: s.user, token: s.token }) }
   )
 )
 
@@ -58,7 +51,6 @@ export const useInvoiceStore = create((set, get) => ({
   invoices: [],
   isLoading: false,
   error: null,
-
   fetchInvoices: async () => {
     set({ isLoading: true, error: null })
     try {
@@ -68,7 +60,6 @@ export const useInvoiceStore = create((set, get) => ({
       set({ error: err.response?.data?.error || 'Failed to fetch invoices', isLoading: false })
     }
   },
-
   createInvoice: async (invoiceData) => {
     try {
       const { data } = await api.post('/invoices', invoiceData)
@@ -78,86 +69,70 @@ export const useInvoiceStore = create((set, get) => ({
       return { success: false, error: err.response?.data?.error || 'Failed to create invoice' }
     }
   },
-
   updateInvoice: async (id, invoiceData) => {
     try {
       const { data } = await api.put(`/invoices/${id}`, invoiceData)
-      set((state) => ({
-        invoices: state.invoices.map((inv) => (inv.id === id ? { ...inv, ...data.invoice } : inv)),
-      }))
+      set((state) => ({ invoices: state.invoices.map((inv) => inv.id === id ? { ...inv, ...data.invoice } : inv) }))
       return { success: true, invoice: data.invoice }
     } catch (err) {
       return { success: false, error: err.response?.data?.error || 'Failed to update invoice' }
     }
   },
-
   updateStatus: async (id, status, partialPercentage) => {
     try {
       const { data } = await api.patch(`/invoices/${id}/status`, { status, partialPercentage })
-      set((state) => ({
-        invoices: state.invoices.map((inv) => (inv.id === id ? { ...inv, ...data.invoice } : inv)),
-      }))
+      set((state) => ({ invoices: state.invoices.map((inv) => inv.id === id ? { ...inv, ...data.invoice } : inv) }))
       return { success: true }
     } catch (err) {
       return { success: false, error: err.response?.data?.error || 'Failed to update status' }
     }
   },
-
   duplicateInvoice: async (id) => {
     try {
       const { data } = await api.post(`/invoices/${id}/duplicate`)
       set((state) => ({ invoices: [data.invoice, ...state.invoices] }))
       return { success: true, invoice: data.invoice }
     } catch (err) {
-      return { success: false, error: err.response?.data?.error || 'Failed to duplicate invoice' }
+      return { success: false, error: err.response?.data?.error || 'Failed to duplicate' }
     }
   },
-
   deleteInvoice: async (id) => {
     try {
       await api.delete(`/invoices/${id}`)
       set((state) => ({ invoices: state.invoices.filter((inv) => inv.id !== id) }))
       return { success: true }
     } catch (err) {
-      return { success: false, error: err.response?.data?.error || 'Failed to delete invoice' }
+      return { success: false, error: err.response?.data?.error || 'Failed to delete' }
     }
   },
-
+  sendInvoiceEmail: async (id, pdfBase64) => {
+    try {
+      const { data } = await api.post(`/invoices/${id}/send-email`, { pdfBase64 })
+      return { success: true, uploadUrl: data.uploadUrl }
+    } catch (err) {
+      return { success: false, error: err.response?.data?.error || 'Failed to send email' }
+    }
+  },
   getInvoiceById: (id) => get().invoices.find((inv) => inv.id === id) || null,
 }))
 
 // ─── Settings Store ───────────────────────────────────────────────────────────
 export const useSettingsStore = create((set) => ({
   settings: {
-    company_name: 'Your Company',
-    company_logo: '',
-    company_address: '',
-    phone: '',
-    email: '',
-    website: '',
-    twitter: '',
-    linkedin: '',
-    facebook: '',
-    default_currency: 'USD',
-    default_tax_percentage: 10,
-    bank_name: '',
-    account_name: '',
-    account_number: '',
-    reminder_enabled: false,
-    reminder_days_before: 3,
+    company_name: 'Your Company', company_logo: '', company_address: '',
+    phone: '', email: '', website: '', twitter: '', linkedin: '', facebook: '',
+    default_currency: 'USD', default_tax_percentage: 10,
+    bank_name: '', account_name: '', account_number: '',
+    reminder_enabled: false, reminder_days_before: 3,
   },
   isLoading: false,
-
   fetchSettings: async () => {
     set({ isLoading: true })
     try {
       const { data } = await api.get('/settings')
       set({ settings: data.settings, isLoading: false })
-    } catch {
-      set({ isLoading: false })
-    }
+    } catch { set({ isLoading: false }) }
   },
-
   saveSettings: async (settingsData) => {
     set({ isLoading: true })
     try {
@@ -168,5 +143,35 @@ export const useSettingsStore = create((set) => ({
       set({ isLoading: false })
       return { success: false, error: err.response?.data?.error || 'Failed to save settings' }
     }
+  },
+}))
+
+// ─── Notifications Store ──────────────────────────────────────────────────────
+export const useNotificationStore = create((set) => ({
+  notifications: [],
+  unreadCount: 0,
+  fetchNotifications: async () => {
+    try {
+      const { data } = await api.get('/notifications')
+      set({ notifications: data.notifications, unreadCount: data.unreadCount })
+    } catch {}
+  },
+  markRead: async (id) => {
+    try {
+      await api.patch(`/notifications/${id}/read`)
+      set((state) => ({
+        notifications: state.notifications.map(n => n.id === id ? { ...n, is_read: true } : n),
+        unreadCount: Math.max(0, state.unreadCount - 1),
+      }))
+    } catch {}
+  },
+  markAllRead: async () => {
+    try {
+      await api.patch('/notifications/read-all')
+      set((state) => ({
+        notifications: state.notifications.map(n => ({ ...n, is_read: true })),
+        unreadCount: 0,
+      }))
+    } catch {}
   },
 }))

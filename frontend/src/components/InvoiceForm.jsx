@@ -1,8 +1,8 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useSettingsStore } from '@/lib/stores'
+import { useSettingsStore, useInvoiceStore } from '@/lib/stores'
 import InvoicePreview from '@/components/InvoicePreview'
-import { Plus, Trash2, Save, Download, Printer, Loader2, Image as ImageIcon } from 'lucide-react'
+import { Plus, Trash2, Save, Download, Printer, Loader2, Image as ImageIcon, Mail } from 'lucide-react'
 import toast from 'react-hot-toast'
 import html2canvas from 'html2canvas'
 import jsPDF from 'jspdf'
@@ -22,7 +22,6 @@ const ALL_STATUSES = [
   { value: 'overdue',    label: 'Overdue',     color: 'text-red-700' },
 ]
 
-// A4 at 96dpi: 794 x 1123. Scale to fit container width ~540px => scale = 540/794 ≈ 0.68
 const PREVIEW_SCALE = 0.60
 const A4_W = 794
 const A4_H = 1123
@@ -30,8 +29,10 @@ const A4_H = 1123
 export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'Save Invoice' }) {
   const navigate = useNavigate()
   const { settings } = useSettingsStore()
+  const { sendInvoiceEmail } = useInvoiceStore()
   const printRef = useRef(null)
   const [saving, setSaving] = useState(false)
+  const [sendingEmail, setSendingEmail] = useState(false)
 
   const [form, setForm] = useState({
     invoiceNumber: initial?.invoice_number || `INV-${Date.now().toString().slice(-6)}`,
@@ -39,7 +40,7 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
     clientEmail: initial?.client_email || '',
     clientAddress: initial?.client_address || '',
     issueDate: initial?.issue_date?.slice(0, 10) || new Date().toISOString().slice(0, 10),
-    dueDate: initial?.due_date?.slice(0, 10) || new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10),
+    dueDate: initial?.due_date?.slice(0, 10) || new Date(Date.now() + 30*86400000).toISOString().slice(0, 10),
     taxPercentage: initial?.tax_percentage ?? settings?.default_tax_percentage ?? 10,
     notes: initial?.notes || '',
     status: initial?.status || 'unpaid',
@@ -52,94 +53,115 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
       : [emptyItem()]
   )
 
-  const set = (field) => (e) => setForm((f) => ({
-    ...f,
-    [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value,
-  }))
+  const set = (field) => (e) => setForm((f) => ({ ...f, [field]: e.target.type === 'checkbox' ? e.target.checked : e.target.value }))
+  const addItem = () => setItems((p) => [...p, emptyItem()])
+  const removeItem = (id) => { if (items.length > 1) setItems((p) => p.filter((i) => i.id !== id)) }
+  const updateItem = (id, field, value) => setItems((p) => p.map((i) => i.id === id ? { ...i, [field]: value } : i))
 
-  const addItem = () => setItems((prev) => [...prev, emptyItem()])
-  const removeItem = (id) => { if (items.length > 1) setItems((prev) => prev.filter((i) => i.id !== id)) }
-  const updateItem = (id, field, value) => setItems((prev) => prev.map((i) => (i.id === id ? { ...i, [field]: value } : i)))
+  // Generate A4 canvas from the preview ref
+  const captureA4Canvas = async () => {
+    if (!printRef.current) throw new Error('Preview not ready')
+    return await html2canvas(printRef.current, {
+      scale: 2, useCORS: true, backgroundColor: '#ffffff',
+      width: A4_W, height: A4_H,
+      windowWidth: A4_W, windowHeight: A4_H,
+      logging: false,
+      onclone: (doc) => {
+        // Ensure all inline styles are preserved in clone
+        const el = doc.querySelector('[data-invoice-preview]')
+        if (el) el.style.transform = 'none'
+      },
+    })
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.clientName.trim()) { toast.error('Client name is required'); return }
     setSaving(true)
-    const result = await onSubmit({ ...form, items })
+
+    // Generate PDF base64 to attach to email if sendEmailNow
+    let pdfBase64 = null
+    if (form.sendEmailNow && form.clientEmail) {
+      try {
+        const canvas = await captureA4Canvas()
+        const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+        pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297)
+        pdfBase64 = pdf.output('datauristring').split(',')[1]
+      } catch (err) { console.warn('PDF generation failed, sending without attachment') }
+    }
+
+    const result = await onSubmit({ ...form, items, pdfBase64 })
     setSaving(false)
     if (result?.success) {
-      toast.success('Invoice saved!')
+      toast.success(form.sendEmailNow && form.clientEmail ? 'Invoice saved & email sent with PDF!' : 'Invoice saved!')
       navigate('/dashboard/history')
     } else {
       toast.error(result?.error || 'Failed to save invoice')
     }
   }
 
-  // Download as A4 PDF — captures exactly what's in the preview
+  // Send email for an already-saved invoice
+  const handleSendEmail = async () => {
+    if (!initial?.id) { toast.error('Save the invoice first'); return }
+    if (!form.clientEmail) { toast.error('Client email is required'); return }
+    setSendingEmail(true)
+    const toastId = toast.loading('Generating PDF & sending email...')
+    try {
+      const canvas = await captureA4Canvas()
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+      pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297)
+      const pdfBase64 = pdf.output('datauristring').split(',')[1]
+      const result = await sendInvoiceEmail(initial.id, pdfBase64)
+      if (result.success) {
+        toast.success('Email with PDF sent to client!', { id: toastId })
+      } else {
+        toast.error(result.error || 'Failed to send email', { id: toastId })
+      }
+    } catch (err) {
+      toast.error('Failed: ' + err.message, { id: toastId })
+    }
+    setSendingEmail(false)
+  }
+
   const downloadPDF = async () => {
-    if (!printRef.current) return
     const toastId = toast.loading('Generating A4 PDF...')
     try {
-      const canvas = await html2canvas(printRef.current, {
-        scale: 2, useCORS: true, backgroundColor: '#ffffff',
-        width: A4_W, height: A4_H,
-      })
+      const canvas = await captureA4Canvas()
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
       pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, 210, 297)
       pdf.save(`Invoice-${form.invoiceNumber}.pdf`)
       toast.success('A4 PDF downloaded!', { id: toastId })
     } catch (err) {
-      console.error(err)
       toast.error('Failed to generate PDF', { id: toastId })
     }
   }
 
-  // Download as PNG image
   const downloadImage = async () => {
-    if (!printRef.current) return
     const toastId = toast.loading('Generating image...')
     try {
-      const canvas = await html2canvas(printRef.current, {
-        scale: 2, useCORS: true, backgroundColor: '#ffffff',
-        width: A4_W, height: A4_H,
-      })
+      const canvas = await captureA4Canvas()
       const link = document.createElement('a')
       link.download = `Invoice-${form.invoiceNumber}.png`
       link.href = canvas.toDataURL('image/png')
       link.click()
       toast.success('Image downloaded!', { id: toastId })
-    } catch (err) {
+    } catch {
       toast.error('Failed to generate image', { id: toastId })
     }
   }
 
-  // Print as A4
   const handlePrint = async () => {
-    if (!printRef.current) return
-    const canvas = await html2canvas(printRef.current, {
-      scale: 2, useCORS: true, backgroundColor: '#ffffff',
-      width: A4_W, height: A4_H,
-    })
-    const imgData = canvas.toDataURL('image/png')
+    const canvas = await captureA4Canvas()
     const pw = window.open('', '_blank')
-    pw.document.write(`
-      <!DOCTYPE html><html><head>
-      <title>Invoice ${form.invoiceNumber}</title>
-      <style>
-        @page { size: A4 portrait; margin: 0; }
-        body { margin: 0; padding: 0; }
-        img { width: 210mm; height: 297mm; display: block; }
-      </style>
-      </head><body>
-      <img src="${imgData}" />
-      <script>window.onload=function(){window.print();}</script>
-      </body></html>
-    `)
+    pw.document.write(`<!DOCTYPE html><html><head><title>Invoice ${form.invoiceNumber}</title>
+      <style>@page{size:A4 portrait;margin:0}body{margin:0}img{width:210mm;height:297mm;display:block}</style>
+      </head><body><img src="${canvas.toDataURL('image/png')}" />
+      <script>window.onload=function(){window.print()}<\/script></body></html>`)
     pw.document.close()
   }
 
-  const subtotal = items.reduce((s, i) => s + Number(i.rate) * Number(i.quantity), 0)
-  const tax = subtotal * (Number(form.taxPercentage) / 100)
+  const subtotal = items.reduce((s, i) => s + Number(i.rate)*Number(i.quantity), 0)
+  const tax = subtotal * (Number(form.taxPercentage)/100)
   const total = subtotal + tax
 
   const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
@@ -158,7 +180,7 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
               <input className={inputCls} value={form.clientName} onChange={set('clientName')} placeholder="Acme Corp" />
             </div>
             <div>
-              <label className={labelCls}>Client Email <span className="text-gray-400 text-xs">(for reminders)</span></label>
+              <label className={labelCls}>Client Email <span className="text-gray-400 text-xs">(for reminders & PDF)</span></label>
               <input type="email" className={inputCls} value={form.clientEmail} onChange={set('clientEmail')} placeholder="client@example.com" />
             </div>
             <div>
@@ -169,7 +191,7 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input type="checkbox" checked={form.sendEmailNow} onChange={set('sendEmailNow')}
                   className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                <span className="text-sm text-gray-600">Send invoice to client email now</span>
+                <span className="text-sm text-gray-600">Send invoice PDF to client when saved</span>
               </label>
             )}
           </div>
@@ -182,33 +204,21 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
               <input className={inputCls} value={form.invoiceNumber} onChange={set('invoiceNumber')} />
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className={labelCls}>Issue Date</label>
-                <input type="date" className={inputCls} value={form.issueDate} onChange={set('issueDate')} />
-              </div>
-              <div>
-                <label className={labelCls}>Due Date</label>
-                <input type="date" className={inputCls} value={form.dueDate} onChange={set('dueDate')} />
-              </div>
+              <div><label className={labelCls}>Issue Date</label><input type="date" className={inputCls} value={form.issueDate} onChange={set('issueDate')} /></div>
+              <div><label className={labelCls}>Due Date</label><input type="date" className={inputCls} value={form.dueDate} onChange={set('dueDate')} /></div>
             </div>
             <div>
               <label className={labelCls}>Status</label>
               <select className={inputCls} value={form.status} onChange={set('status')}>
-                {ALL_STATUSES.map(s => (
-                  <option key={s.value} value={s.value}>{s.label}</option>
-                ))}
+                {ALL_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
               </select>
             </div>
             {form.status === 'partial' && (
               <div>
                 <label className={labelCls}>Partial Payment (%)</label>
                 <div className="flex items-center gap-2">
-                  <input
-                    type="number" min="1" max="99" step="1"
-                    className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    value={form.partialPercentage}
-                    onChange={set('partialPercentage')}
-                  />
+                  <input type="number" min="1" max="99" className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    value={form.partialPercentage} onChange={set('partialPercentage')} />
                   <span className="text-sm text-gray-500">% paid so far</span>
                 </div>
               </div>
@@ -223,54 +233,38 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
                 <Plus className="h-3.5 w-3.5" /> Add Item
               </button>
             </div>
-
             <div className="space-y-2">
               <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-400 px-1">
-                <div className="col-span-5">Description</div>
-                <div className="col-span-3">Rate</div>
-                <div className="col-span-2">Qty</div>
-                <div className="col-span-2 text-right">Amount</div>
+                <div className="col-span-5">Description</div><div className="col-span-3">Rate</div>
+                <div className="col-span-2">Qty</div><div className="col-span-2 text-right">Amount</div>
               </div>
-
               {items.map((item) => (
                 <div key={item.id} className="grid grid-cols-12 gap-2 items-center">
-                  <input className={`col-span-5 ${inputCls}`} value={item.description}
-                    onChange={(e) => updateItem(item.id, 'description', e.target.value)} placeholder="Description" />
-                  <input type="number" className={`col-span-3 ${inputCls}`} value={item.rate}
-                    onChange={(e) => updateItem(item.id, 'rate', parseFloat(e.target.value) || 0)} min="0" step="0.01" />
-                  <input type="number" className={`col-span-2 ${inputCls}`} value={item.quantity}
-                    onChange={(e) => updateItem(item.id, 'quantity', parseInt(e.target.value) || 1)} min="1" />
+                  <input className={`col-span-5 ${inputCls}`} value={item.description} onChange={(e) => updateItem(item.id,'description',e.target.value)} placeholder="Description" />
+                  <input type="number" className={`col-span-3 ${inputCls}`} value={item.rate} onChange={(e) => updateItem(item.id,'rate',parseFloat(e.target.value)||0)} min="0" step="0.01" />
+                  <input type="number" className={`col-span-2 ${inputCls}`} value={item.quantity} onChange={(e) => updateItem(item.id,'quantity',parseInt(e.target.value)||1)} min="1" />
                   <div className="col-span-2 flex items-center justify-end gap-1">
-                    <span className="text-xs font-medium text-gray-700">${(Number(item.rate) * Number(item.quantity)).toFixed(2)}</span>
-                    <button type="button" onClick={() => removeItem(item.id)} disabled={items.length === 1}
-                      className="p-1 rounded text-gray-300 hover:text-red-500 disabled:opacity-30">
+                    <span className="text-xs font-medium text-gray-700">${(Number(item.rate)*Number(item.quantity)).toFixed(2)}</span>
+                    <button type="button" onClick={() => removeItem(item.id)} disabled={items.length===1} className="p-1 rounded text-gray-300 hover:text-red-500 disabled:opacity-30">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 </div>
               ))}
             </div>
-
-            {/* Totals */}
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-500">
-                <span>Subtotal</span><span>${subtotal.toFixed(2)}</span>
-              </div>
+              <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
               <div className="flex items-center justify-between text-gray-500">
-                <div className="flex items-center gap-2">
-                  <span>Tax</span>
+                <div className="flex items-center gap-2"><span>Tax</span>
                   <div className="flex items-center gap-1">
-                    <input type="number"
-                      className="w-14 rounded border border-gray-200 px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    <input type="number" className="w-14 rounded border border-gray-200 px-2 py-0.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                       value={form.taxPercentage} onChange={set('taxPercentage')} min="0" max="100" />
                     <span className="text-xs">%</span>
                   </div>
                 </div>
                 <span>${tax.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100">
-                <span>Total</span><span>${total.toFixed(2)}</span>
-              </div>
+              <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100"><span>Total</span><span>${total.toFixed(2)}</span></div>
             </div>
           </div>
 
@@ -286,6 +280,13 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               {submitLabel}
             </button>
+            {initial?.id && (
+              <button type="button" onClick={handleSendEmail} disabled={sendingEmail||!form.clientEmail}
+                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                {sendingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+                Send PDF to Client
+              </button>
+            )}
             <button type="button" onClick={downloadPDF} className="flex items-center gap-2 rounded-lg border border-gray-200 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50">
               <Download className="h-4 w-4" /> PDF (A4)
             </button>
@@ -305,31 +306,14 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
               <p className="font-semibold text-gray-900 text-sm">Live Preview — A4</p>
               <span className="text-xs text-gray-400">210 × 297 mm</span>
             </div>
-            {/* Container sized to exactly fit the scaled A4 */}
-            <div
-              className="bg-gray-100 flex items-start justify-center p-3"
-              style={{ height: `${Math.round(A4_H * PREVIEW_SCALE) + 24}px`, overflow: 'hidden' }}
-            >
-              <div style={{
-                transform: `scale(${PREVIEW_SCALE})`,
-                transformOrigin: 'top center',
-                width: `${A4_W}px`,
-                flexShrink: 0,
-              }}>
-                <InvoicePreview
-                  ref={printRef}
-                  clientName={form.clientName}
-                  clientEmail={form.clientEmail}
-                  clientAddress={form.clientAddress}
-                  invoiceNumber={form.invoiceNumber}
-                  issueDate={form.issueDate}
-                  dueDate={form.dueDate}
-                  items={items}
-                  taxPercentage={form.taxPercentage}
-                  notes={form.notes}
-                  settings={settings}
-                  status={form.status}
-                  partialPercentage={form.partialPercentage}
+            <div className="bg-gray-100 flex items-start justify-center p-3"
+              style={{ height: `${Math.round(A4_H * PREVIEW_SCALE) + 24}px`, overflow: 'hidden' }}>
+              <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top center', width: `${A4_W}px`, flexShrink: 0 }}>
+                <InvoicePreview ref={printRef}
+                  clientName={form.clientName} clientEmail={form.clientEmail} clientAddress={form.clientAddress}
+                  invoiceNumber={form.invoiceNumber} issueDate={form.issueDate} dueDate={form.dueDate}
+                  items={items} taxPercentage={form.taxPercentage} notes={form.notes}
+                  settings={settings} status={form.status} partialPercentage={form.partialPercentage}
                 />
               </div>
             </div>

@@ -153,11 +153,11 @@ function SortIcon({ field, sortField, sortDir }) {
 }
 
 export default function History() {
-  const { invoices, fetchInvoices, updateStatus, duplicateInvoice, deleteInvoice, isLoading } = useInvoiceStore()
+  const { invoices, fetchInvoices, updateStatus, duplicateInvoice, deleteInvoice, isLoading, sendInvoiceEmail: sendInvoiceEmailFn } = useInvoiceStore()
   const { settings, fetchSettings } = useSettingsStore()
-  const [preview, setPreview] = useState(null)
+  const [viewModal, setViewModal] = useState(null)   // invoice shown in preview modal
+  const [captureTarget, setCaptureTarget] = useState(null) // invoice being captured off-screen
   const [confirm, setConfirm] = useState(null)
-  const [reminderLogs, setReminderLogs] = useState(null) // { invoiceNumber, logs }
   const printRef = useRef(null)
 
   // Search & sort state
@@ -233,14 +233,20 @@ export default function History() {
 
   // Generic canvas capture of printRef
   const captureCanvas = async (inv) => {
-    setPreview(inv)
-    await new Promise(r => setTimeout(r, 160))
+    setCaptureTarget(inv)
+    await new Promise(r => setTimeout(r, 220))
     const canvas = await html2canvas(printRef.current, {
       scale: 2, useCORS: true, backgroundColor: '#ffffff',
       width: A4_W, height: A4_H,
+      windowWidth: A4_W, windowHeight: A4_H,
+      logging: false,
     })
-    setPreview(null)
+    setCaptureTarget(null)
     return canvas
+  }
+
+  const captureAndClear = async (inv) => {
+    return await captureCanvas(inv)
   }
 
   const downloadPDF = async (inv) => {
@@ -392,7 +398,7 @@ export default function History() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => setPreview(inv)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100">
+                        <button onClick={() => setViewModal(inv)} className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100">
                           <Eye className="h-4 w-4" />
                         </button>
                         <DropMenu
@@ -422,54 +428,54 @@ export default function History() {
         <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-400" /> 1-day sent</span>
       </div>
 
-      {/* Hidden invoice for PDF/print capture */}
-      {preview && (
-        <div className="fixed left-[-9999px] top-0" aria-hidden="true">
+      {/* Hidden invoice for PDF/print/email capture — separate from modal */}
+      {captureTarget && (
+        <div className="fixed left-[-9999px] top-0" aria-hidden="true" style={{ zIndex: -1 }}>
           <InvoicePreview
             ref={printRef}
-            clientName={preview.client_name}
-            clientEmail={preview.client_email}
-            clientAddress={preview.client_address}
-            invoiceNumber={preview.invoice_number}
-            issueDate={preview.issue_date}
-            dueDate={preview.due_date}
-            items={preview.items}
-            taxPercentage={preview.tax_percentage}
-            notes={preview.notes}
+            clientName={captureTarget.client_name}
+            clientEmail={captureTarget.client_email}
+            clientAddress={captureTarget.client_address}
+            invoiceNumber={captureTarget.invoice_number}
+            issueDate={captureTarget.issue_date}
+            dueDate={captureTarget.due_date}
+            items={captureTarget.items}
+            taxPercentage={captureTarget.tax_percentage}
+            notes={captureTarget.notes}
             settings={settings}
-            status={preview.status}
-            partialPercentage={preview.partial_percentage}
+            status={captureTarget.status}
+            partialPercentage={captureTarget.partial_percentage}
           />
         </div>
       )}
 
       {/* Preview Modal */}
-      {preview && (
+      {viewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60">
           <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[95vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b">
               <div>
-                <h2 className="font-semibold text-gray-900">Invoice {preview.invoice_number}</h2>
+                <h2 className="font-semibold text-gray-900">Invoice {viewModal.invoice_number}</h2>
                 {/* Reminder email timeline */}
                 <div className="flex items-center gap-3 mt-1">
-                  {preview.email_sent_at_7day && (
+                  {viewModal.email_sent_at_7day && (
                     <span className="text-xs text-blue-600 flex items-center gap-1">
-                      📧 7-day: {new Date(preview.email_sent_at_7day).toLocaleString()}
+                      📧 7-day: {new Date(viewModal.email_sent_at_7day).toLocaleString()}
                     </span>
                   )}
-                  {preview.email_sent_at_3day && (
+                  {viewModal.email_sent_at_3day && (
                     <span className="text-xs text-yellow-600 flex items-center gap-1">
-                      📧 3-day: {new Date(preview.email_sent_at_3day).toLocaleString()}
+                      📧 3-day: {new Date(viewModal.email_sent_at_3day).toLocaleString()}
                     </span>
                   )}
-                  {preview.email_sent_at_1day && (
+                  {viewModal.email_sent_at_1day && (
                     <span className="text-xs text-red-600 flex items-center gap-1">
-                      📧 1-day: {new Date(preview.email_sent_at_1day).toLocaleString()}
+                      📧 1-day: {new Date(viewModal.email_sent_at_1day).toLocaleString()}
                     </span>
                   )}
                 </div>
               </div>
-              <button onClick={() => setPreview(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
+              <button onClick={() => setViewModal(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -482,30 +488,29 @@ export default function History() {
                 marginBottom: `-${Math.round(A4_H * 0.42)}px`,
               }}>
                 <InvoicePreview
-                  ref={printRef}
-                  clientName={preview.client_name}
-                  clientEmail={preview.client_email}
-                  clientAddress={preview.client_address}
-                  invoiceNumber={preview.invoice_number}
-                  issueDate={preview.issue_date}
-                  dueDate={preview.due_date}
-                  items={preview.items}
-                  taxPercentage={preview.tax_percentage}
-                  notes={preview.notes}
+                  clientName={viewModal.client_name}
+                  clientEmail={viewModal.client_email}
+                  clientAddress={viewModal.client_address}
+                  invoiceNumber={viewModal.invoice_number}
+                  issueDate={viewModal.issue_date}
+                  dueDate={viewModal.due_date}
+                  items={viewModal.items}
+                  taxPercentage={viewModal.tax_percentage}
+                  notes={viewModal.notes}
                   settings={settings}
-                  status={preview.status}
-                  partialPercentage={preview.partial_percentage}
+                  status={viewModal.status}
+                  partialPercentage={viewModal.partial_percentage}
                 />
               </div>
             </div>
             <div className="flex gap-2 px-5 py-3 border-t bg-white">
-              <button onClick={() => downloadPDF(preview)} className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50">
+              <button onClick={() => downloadPDF(viewModal)} className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50">
                 <Download className="h-4 w-4" /> PDF (A4)
               </button>
-              <button onClick={() => downloadImage(preview)} className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50">
+              <button onClick={() => downloadImage(viewModal)} className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50">
                 <ImageIcon className="h-4 w-4" /> Image
               </button>
-              <button onClick={() => printInvoice(preview)} className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50">
+              <button onClick={() => printInvoice(viewModal)} className="flex items-center gap-2 rounded-lg border px-4 py-2 text-sm font-medium hover:bg-gray-50">
                 <Printer className="h-4 w-4" /> Print (A4)
               </button>
             </div>
