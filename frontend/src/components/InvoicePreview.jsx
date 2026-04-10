@@ -15,19 +15,29 @@ const InvoicePreview = forwardRef(function InvoicePreview(
   const total = subtotal + taxAmount
   const currency = settings.default_currency || settings.defaultCurrency || 'USD'
 
+  // Social media links
+  const twitter  = settings.twitter  || settings.companyTwitter  || ''
+  const linkedin = settings.linkedin || settings.companyLinkedin || ''
+  const facebook = settings.facebook || settings.companyFacebook || ''
+  const hasSocial = twitter || linkedin || facebook
+
   const statusStyles = {
-    paid:       { bg: '#dcfce7', color: '#166534', label: 'PAID' },
-    unpaid:     { bg: '#fee2e2', color: '#991b1b', label: 'UNPAID' },
-    pending:    { bg: '#fef9c3', color: '#854d0e', label: 'PENDING' },
-    partial:    { bg: '#fff7ed', color: '#c2410c', label: `PARTIAL${partialPercentage ? ` (${partialPercentage}%)` : ''}` },
-    failed:     { bg: '#fee2e2', color: '#7f1d1d', label: 'FAILED' },
-    cancelled:  { bg: '#f3f4f6', color: '#374151', label: 'CANCELLED' },
-    refunded:   { bg: '#ede9fe', color: '#5b21b6', label: 'REFUNDED' },
-    expired:    { bg: '#fce7f3', color: '#9d174d', label: 'EXPIRED' },
-    processing: { bg: '#dbeafe', color: '#1e40af', label: 'PROCESSING' },
-    overdue:    { bg: '#fee2e2', color: '#991b1b', label: 'OVERDUE' },
+    paid:             { bg: '#dcfce7', color: '#166534', label: 'PAID' },
+    unpaid:           { bg: '#fee2e2', color: '#991b1b', label: 'UNPAID' },
+    pending:          { bg: '#fef9c3', color: '#854d0e', label: 'PENDING' },
+    pending_payment:  { bg: '#fef3c7', color: '#92400e', label: 'PENDING PAYMENT' },
+    partial:          { bg: '#fff7ed', color: '#c2410c', label: `PARTIAL${partialPercentage ? ` (${partialPercentage}%)` : ''}` },
+    failed:           { bg: '#fee2e2', color: '#7f1d1d', label: 'FAILED' },
+    cancelled:        { bg: '#f3f4f6', color: '#374151', label: 'CANCELLED' },
+    refunded:         { bg: '#ede9fe', color: '#5b21b6', label: 'REFUNDED' },
+    expired:          { bg: '#fce7f3', color: '#9d174d', label: 'EXPIRED' },
+    processing:       { bg: '#dbeafe', color: '#1e40af', label: 'PROCESSING' },
+    overdue:          { bg: '#fee2e2', color: '#991b1b', label: 'OVERDUE' },
   }
   const ss = status ? (statusStyles[status] || statusStyles.unpaid) : null
+
+  // Logo: display cleanly without white bg box
+  const logoSrc = settings.company_logo || settings.companyLogo || ''
 
   return (
     <div
@@ -36,69 +46,118 @@ const InvoicePreview = forwardRef(function InvoicePreview(
         width: `${A4_W}px`,
         minHeight: `${A4_H}px`,
         backgroundColor: '#ffffff',
-        fontFamily: 'Arial, sans-serif',
+        fontFamily: "'Arial', 'Helvetica Neue', Helvetica, sans-serif",
         display: 'flex',
         flexDirection: 'column',
         boxSizing: 'border-box',
+        WebkitFontSmoothing: 'antialiased',
       }}
     >
       {/* Top accent bar */}
-      <div style={{ height: '6px', background: 'linear-gradient(90deg, #1a1a2e 0%, #3b82f6 100%)' }} />
+      <div style={{ height: '6px', background: 'linear-gradient(90deg, #1a1a2e 0%, #3b82f6 100%)', flexShrink: 0 }} />
 
       <div style={{ display: 'flex', flex: 1 }}>
-        {/* Left sidebar */}
+        {/* ── Left sidebar ── */}
         <div style={{
-          width: '240px', flexShrink: 0,
+          width: '230px', flexShrink: 0,
           backgroundColor: '#1a1a2e', color: '#fff',
-          padding: '36px 24px',
+          padding: '32px 22px',
           display: 'flex', flexDirection: 'column',
+          gap: 0,
         }}>
-          {/* Logo */}
-          {settings.company_logo || settings.companyLogo ? (
-            <img
-              src={settings.company_logo || settings.companyLogo}
-              alt="logo"
-              style={{ width: '88px', height: '88px', objectFit: 'contain', borderRadius: '10px', marginBottom: '18px', background: '#fff', padding: '4px' }}
-            />
+          {/* Logo — no white box, transparent bg, clean display */}
+          {logoSrc ? (
+            <div style={{ marginBottom: '18px' }}>
+              <img
+                src={logoSrc}
+                alt="logo"
+                style={{
+                  width: '100px',
+                  height: '100px',
+                  objectFit: 'contain',
+                  objectPosition: 'left center',
+                  display: 'block',
+                  // No background, no border, no padding — pure transparent display
+                  // filter: 'brightness(0) invert(1)',  // makes dark logos visible on dark bg
+                }}
+                onError={(e) => { e.target.style.display = 'none' }}
+              />
+            </div>
           ) : (
-            <div style={{ width: '60px', height: '60px', backgroundColor: '#3b82f6', borderRadius: '10px', marginBottom: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '26px', fontWeight: 'bold' }}>
+            /* Initials avatar — clean, no white box */
+            <div style={{
+              width: '56px', height: '56px',
+              background: 'linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%)',
+              borderRadius: '12px', marginBottom: '18px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '24px', fontWeight: '800', color: '#fff',
+              letterSpacing: '-0.02em',
+              boxShadow: '0 4px 12px rgba(59,130,246,0.4)',
+            }}>
               {(settings.company_name || settings.companyName || 'C')[0].toUpperCase()}
             </div>
           )}
 
-          <h2 style={{ fontSize: '16px', fontWeight: '700', margin: '0 0 2px' }}>
+          <h2 style={{ fontSize: '15px', fontWeight: '700', margin: '0 0 2px', lineHeight: '1.3', color: '#fff' }}>
             {settings.company_name || settings.companyName || 'Your Company'}
           </h2>
 
-          <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: '20px', lineHeight: '1.8' }}>
+          {/* Company details */}
+          <div style={{ fontSize: '10.5px', color: '#94a3b8', marginTop: '16px', lineHeight: '1.75' }}>
             {(settings.company_address || settings.companyAddress) && (
-              <p style={{ whiteSpace: 'pre-line', margin: '0 0 8px' }}>{settings.company_address || settings.companyAddress}</p>
+              <div style={{ whiteSpace: 'pre-line', marginBottom: '8px' }}>{settings.company_address || settings.companyAddress}</div>
             )}
-            {settings.phone && <p style={{ margin: '0 0 2px' }}>📞 {settings.phone}</p>}
-            {(settings.email || settings.companyEmail) && <p style={{ margin: '0 0 2px' }}>✉ {settings.email || settings.companyEmail}</p>}
-            {settings.website && <p style={{ margin: '0 0 2px' }}>🌐 {settings.website}</p>}
+            {settings.phone && (
+              <div style={{ marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontSize: '9px' }}>📞</span> {settings.phone}
+              </div>
+            )}
+            {(settings.email || settings.companyEmail) && (
+              <div style={{ marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontSize: '9px' }}>✉</span> {settings.email || settings.companyEmail}
+              </div>
+            )}
+            {settings.website && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+                <span style={{ fontSize: '9px' }}>🌐</span> {settings.website}
+              </div>
+            )}
           </div>
+
+          {/* Social media */}
+          {hasSocial && (
+            <div style={{ marginTop: '14px', fontSize: '10px', color: '#64748b', lineHeight: '1.8' }}>
+              <div style={{ height: '1px', background: '#1e2d47', marginBottom: '12px' }} />
+              {twitter  && <div style={{ color: '#7dd3fc' }}>𝕏 {twitter}</div>}
+              {linkedin && <div style={{ color: '#7dd3fc' }}>in {linkedin}</div>}
+              {facebook && <div style={{ color: '#7dd3fc' }}>f {facebook}</div>}
+            </div>
+          )}
 
           {/* Payment info */}
           {(settings.bank_name || settings.bankName) && (
-            <div style={{ marginTop: '28px', fontSize: '11px', borderTop: '1px solid #334155', paddingTop: '20px' }}>
-              <p style={{ color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', fontSize: '9px', marginBottom: '10px', fontWeight: '600' }}>Payment Info</p>
-              <p style={{ color: '#e2e8f0', margin: '0 0 3px', fontWeight: '600' }}>{settings.bank_name || settings.bankName}</p>
-              <p style={{ color: '#94a3b8', margin: '0 0 3px' }}>{settings.account_name || settings.accountName}</p>
-              <p style={{ color: '#94a3b8', margin: 0 }}>{settings.account_number || settings.accountNumber}</p>
+            <div style={{ marginTop: '20px', fontSize: '10.5px' }}>
+              <div style={{ height: '1px', background: '#1e2d47', marginBottom: '14px' }} />
+              <div style={{ color: '#475569', textTransform: 'uppercase', letterSpacing: '0.09em', fontSize: '8.5px', marginBottom: '8px', fontWeight: '700' }}>
+                Payment Info
+              </div>
+              <div style={{ color: '#e2e8f0', marginBottom: '3px', fontWeight: '600' }}>{settings.bank_name || settings.bankName}</div>
+              <div style={{ color: '#94a3b8', marginBottom: '2px' }}>{settings.account_name || settings.accountName}</div>
+              <div style={{ color: '#94a3b8', fontFamily: 'monospace', fontSize: '10px' }}>{settings.account_number || settings.accountNumber}</div>
             </div>
           )}
 
           {/* Status stamp */}
           {ss && (
-            <div style={{ marginTop: 'auto', paddingTop: '24px' }}>
+            <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
               <div style={{
                 background: ss.bg, color: ss.color,
                 border: `2px solid ${ss.color}`,
-                borderRadius: '6px', padding: '8px 12px',
-                fontSize: '13px', fontWeight: '800',
-                textAlign: 'center', letterSpacing: '0.1em',
-                transform: 'rotate(-3deg)',
+                borderRadius: '6px', padding: '7px 10px',
+                fontSize: '11px', fontWeight: '800',
+                textAlign: 'center', letterSpacing: '0.12em',
+                transform: 'rotate(-4deg)',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
               }}>
                 {ss.label}
               </div>
@@ -106,50 +165,50 @@ const InvoicePreview = forwardRef(function InvoicePreview(
           )}
         </div>
 
-        {/* Right content */}
-        <div style={{ flex: 1, padding: '36px 32px', display: 'flex', flexDirection: 'column' }}>
+        {/* ── Right content ── */}
+        <div style={{ flex: 1, padding: '32px 28px', display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {/* Header */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '26px' }}>
             <div>
-              <h1 style={{ fontSize: '36px', fontWeight: '900', color: '#1a1a2e', letterSpacing: '-0.03em', margin: 0 }}>INVOICE</h1>
-              <p style={{ fontSize: '13px', color: '#64748b', marginTop: '3px', margin: '3px 0 0' }}># {invoiceNumber}</p>
+              <h1 style={{ fontSize: '34px', fontWeight: '900', color: '#1a1a2e', letterSpacing: '-0.03em', margin: 0, lineHeight: 1 }}>INVOICE</h1>
+              <p style={{ fontSize: '12px', color: '#94a3b8', margin: '4px 0 0', fontWeight: '500' }}>#{invoiceNumber}</p>
             </div>
-            <div style={{ textAlign: 'right', fontSize: '12px', color: '#475569' }}>
+            <div style={{ textAlign: 'right', fontSize: '11px', color: '#475569' }}>
               <div style={{ marginBottom: '5px' }}>
                 <span style={{ color: '#94a3b8' }}>Issued: </span>
-                <span style={{ fontWeight: '600' }}>{formatDate(issueDate)}</span>
+                <span style={{ fontWeight: '600', color: '#374151' }}>{formatDate(issueDate)}</span>
               </div>
-              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '3px 10px', borderRadius: '4px', display: 'inline-block', fontWeight: '700', fontSize: '11px' }}>
+              <div style={{ background: '#fee2e2', color: '#991b1b', padding: '3px 10px', borderRadius: '4px', display: 'inline-block', fontWeight: '700', fontSize: '10px', letterSpacing: '0.02em' }}>
                 Due: {formatDate(dueDate)}
               </div>
             </div>
           </div>
 
           {/* Bill to */}
-          <div style={{ marginBottom: '28px', background: '#f8fafc', borderRadius: '8px', padding: '16px 18px' }}>
-            <p style={{ fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94a3b8', margin: '0 0 8px', fontWeight: '600' }}>Bill To</p>
-            <p style={{ fontSize: '16px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 3px' }}>{clientName || '—'}</p>
-            {clientEmail && <p style={{ fontSize: '12px', color: '#3b82f6', margin: '0 0 2px' }}>{clientEmail}</p>}
-            {clientAddress && <p style={{ fontSize: '12px', color: '#64748b', whiteSpace: 'pre-line', margin: '2px 0 0' }}>{clientAddress}</p>}
+          <div style={{ marginBottom: '22px', background: '#f8fafc', borderRadius: '8px', padding: '14px 16px', border: '1px solid #e2e8f0' }}>
+            <p style={{ fontSize: '8.5px', textTransform: 'uppercase', letterSpacing: '0.12em', color: '#94a3b8', margin: '0 0 7px', fontWeight: '700' }}>Bill To</p>
+            <p style={{ fontSize: '15px', fontWeight: '700', color: '#1a1a2e', margin: '0 0 3px' }}>{clientName || '—'}</p>
+            {clientEmail && <p style={{ fontSize: '11px', color: '#3b82f6', margin: '0 0 2px' }}>{clientEmail}</p>}
+            {clientAddress && <p style={{ fontSize: '11px', color: '#64748b', whiteSpace: 'pre-line', margin: '2px 0 0', lineHeight: '1.5' }}>{clientAddress}</p>}
           </div>
 
           {/* Items table */}
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', marginBottom: '20px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11.5px', marginBottom: '18px' }}>
             <thead>
               <tr style={{ backgroundColor: '#1a1a2e', color: '#fff' }}>
-                <th style={{ padding: '10px 14px', textAlign: 'left', fontWeight: '600', borderRadius: '6px 0 0 6px', fontSize: '11px', letterSpacing: '0.05em' }}>DESCRIPTION</th>
-                <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '600', fontSize: '11px' }}>RATE</th>
-                <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '600', fontSize: '11px' }}>QTY</th>
-                <th style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '600', borderRadius: '0 6px 6px 0', fontSize: '11px' }}>AMOUNT</th>
+                <th style={{ padding: '9px 12px', textAlign: 'left', fontWeight: '600', borderRadius: '5px 0 0 5px', fontSize: '10px', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Description</th>
+                <th style={{ padding: '9px 12px', textAlign: 'right', fontWeight: '600', fontSize: '10px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Rate</th>
+                <th style={{ padding: '9px 12px', textAlign: 'right', fontWeight: '600', fontSize: '10px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Qty</th>
+                <th style={{ padding: '9px 12px', textAlign: 'right', fontWeight: '600', borderRadius: '0 5px 5px 0', fontSize: '10px', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Amount</th>
               </tr>
             </thead>
             <tbody>
               {items.map((item, i) => (
                 <tr key={item.id || i} style={{ backgroundColor: i % 2 === 0 ? '#ffffff' : '#f8fafc', borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '10px 14px', color: '#374151' }}>{item.description || '—'}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', color: '#374151' }}>{formatCurrency(item.rate, currency)}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', color: '#374151' }}>{item.quantity}</td>
-                  <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: '600', color: '#1a1a2e' }}>
+                  <td style={{ padding: '9px 12px', color: '#374151', lineHeight: '1.4' }}>{item.description || '—'}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{formatCurrency(item.rate, currency)}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right', color: '#374151' }}>{item.quantity}</td>
+                  <td style={{ padding: '9px 12px', textAlign: 'right', fontWeight: '600', color: '#1a1a2e' }}>
                     {formatCurrency(Number(item.rate) * Number(item.quantity), currency)}
                   </td>
                 </tr>
@@ -158,22 +217,23 @@ const InvoicePreview = forwardRef(function InvoicePreview(
           </table>
 
           {/* Totals */}
-          <div style={{ marginLeft: 'auto', width: '210px', fontSize: '12px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', color: '#475569' }}>
+          <div style={{ marginLeft: 'auto', width: '200px', fontSize: '11.5px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#475569' }}>
               <span>Subtotal</span>
               <span>{formatCurrency(subtotal, currency)}</span>
             </div>
             {Number(taxPercentage) > 0 && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '5px 0', color: '#475569' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', color: '#475569' }}>
                 <span>Tax ({taxPercentage}%)</span>
                 <span>{formatCurrency(taxAmount, currency)}</span>
               </div>
             )}
             <div style={{
               display: 'flex', justifyContent: 'space-between',
-              padding: '10px 14px', marginTop: '6px',
+              padding: '9px 12px', marginTop: '5px',
               background: 'linear-gradient(135deg, #1a1a2e 0%, #2d3a5e 100%)',
-              color: '#fff', borderRadius: '8px', fontWeight: '700', fontSize: '14px'
+              color: '#fff', borderRadius: '7px', fontWeight: '700', fontSize: '13px',
+              boxShadow: '0 2px 8px rgba(26,26,46,0.25)',
             }}>
               <span>TOTAL</span>
               <span>{formatCurrency(total, currency)}</span>
@@ -182,21 +242,21 @@ const InvoicePreview = forwardRef(function InvoicePreview(
 
           {/* Notes */}
           {notes && (
-            <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #e2e8f0', fontSize: '11px', color: '#64748b' }}>
-              <p style={{ fontWeight: '600', marginBottom: '5px', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.05em', fontSize: '10px' }}>Notes</p>
+            <div style={{ marginTop: 'auto', paddingTop: '16px', borderTop: '1px solid #e2e8f0', fontSize: '10.5px', color: '#64748b' }}>
+              <p style={{ fontWeight: '700', marginBottom: '4px', color: '#374151', textTransform: 'uppercase', letterSpacing: '0.07em', fontSize: '9px' }}>Notes</p>
               <p style={{ whiteSpace: 'pre-line', margin: 0, lineHeight: '1.6' }}>{notes}</p>
             </div>
           )}
 
-          {/* Footer line */}
-          <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '10px', color: '#cbd5e1' }}>
+          {/* Footer */}
+          <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '9.5px', color: '#cbd5e1', letterSpacing: '0.05em' }}>
             Thank you for your business!
           </div>
         </div>
       </div>
 
       {/* Bottom accent */}
-      <div style={{ height: '4px', background: 'linear-gradient(90deg, #3b82f6 0%, #1a1a2e 100%)' }} />
+      <div style={{ height: '4px', background: 'linear-gradient(90deg, #3b82f6 0%, #1a1a2e 100%)', flexShrink: 0 }} />
     </div>
   )
 })

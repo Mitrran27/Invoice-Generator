@@ -232,22 +232,27 @@ export default function Settings() {
           </label>
 
           {form.reminderEnabled && (
-            <div className="pl-7">
-              <label className={labelCls}>Days before due date</label>
-              <div className="flex items-center gap-2">
-                <input
-                  type="number"
-                  className="w-20 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={form.reminderDaysBefore}
-                  onChange={set('reminderDaysBefore')}
-                  min="1"
-                  max="30"
-                />
-                <span className="text-sm text-gray-500">days before due date</span>
+            <div className="pl-7 space-y-4">
+              {/* Automated schedule — fixed 3-tier */}
+              <div>
+                <p className="text-sm font-medium text-gray-700 mb-2">Automated reminder schedule</p>
+                <div className="space-y-2">
+                  {[
+                    { days: 7, color: 'bg-blue-100 text-blue-700 border-blue-200', dot: 'bg-blue-400', label: '7 days before due' },
+                    { days: 3, color: 'bg-yellow-100 text-yellow-700 border-yellow-200', dot: 'bg-yellow-400', label: '3 days before due' },
+                    { days: 1, color: 'bg-red-100 text-red-700 border-red-200', dot: 'bg-red-400', label: '1 day before due (final)' },
+                  ].map(({ days, color, dot, label }) => (
+                    <div key={days} className={`flex items-center gap-3 px-3 py-2 rounded-lg border text-xs font-medium ${color}`}>
+                      <span className={`w-2 h-2 rounded-full ${dot} flex-shrink-0`} />
+                      <span>{label}</span>
+                      <span className="ml-auto text-gray-400 font-normal">Sent daily at 8:00 AM</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-400 mt-2">
+                  All three reminders run automatically. Only invoices with status unpaid/pending/partial and a client email will receive reminders.
+                </p>
               </div>
-              <p className="text-xs text-gray-400 mt-2">
-                Reminders run daily at 8:00 AM server time. Only unpaid invoices with a client email will receive reminders.
-              </p>
             </div>
           )}
         </Section>

@@ -85,7 +85,7 @@ function ReviewModal({ receipt, onClose, onReviewed }) {
             {[
               { label: 'From', value: receipt.client_name || receipt.inv_client_name },
               { label: 'Email', value: receipt.client_email || '—' },
-              { label: 'Amount Paid', value: receipt.amount_paid ? `${receipt.currency || 'USD'} ${Number(receipt.amount_paid).toFixed(2)}` : '—', highlight: true },
+              { label: receipt.detected_amount !== null && receipt.detected_amount !== undefined ? '🔍 Auto-Detected Amount' : 'Amount Paid', value: receipt.amount_paid ? `${receipt.currency || 'USD'} ${Number(receipt.amount_paid).toFixed(2)}` : '—', highlight: true },
               { label: 'Invoice Total', value: receipt.invoice_total ? `${receipt.default_currency || 'USD'} ${Number(receipt.invoice_total).toFixed(2)}` : '—' },
               { label: 'Payment Method', value: receipt.payment_method || '—' },
               { label: 'Payment Date', value: receipt.payment_date ? formatDate(receipt.payment_date) : '—' },

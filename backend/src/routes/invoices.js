@@ -100,12 +100,18 @@ router.post('/', async (req, res) => {
       let pdfBuffer = null;
       if (pdfBase64) pdfBuffer = Buffer.from(pdfBase64, 'base64');
 
-      sendInvoiceEmail({
-        to: clientEmail, clientName, invoiceNumber, dueDate, amount: total,
-        currency: settings.default_currency||'USD',
-        companyName: settings.company_name||'Your Company',
-        pdfBuffer, uploadUrl,
-      }).catch(console.error);
+      // Send email synchronously (instant) then record sent time
+      try {
+        await sendInvoiceEmail({
+          to: clientEmail, clientName, invoiceNumber, dueDate, amount: total,
+          currency: settings.default_currency||'USD',
+          companyName: settings.company_name||'Your Company',
+          pdfBuffer, uploadUrl,
+        });
+        await pool.query('UPDATE invoices SET invoice_sent_at=NOW() WHERE id=$1', [invoice.id]);
+      } catch (emailErr) {
+        console.error('Send email on create failed:', emailErr.message);
+      }
     }
 
     res.status(201).json({ invoice: { ...invoice, items: insertedItems } });
@@ -155,6 +161,9 @@ router.post('/:id/send-email', async (req, res) => {
       dueDate: inv.due_date, amount: total, currency: settings.default_currency||'USD',
       companyName: settings.company_name||'Your Company', pdfBuffer, uploadUrl,
     });
+
+    // Record when invoice was sent
+    await pool.query('UPDATE invoices SET invoice_sent_at=NOW(), updated_at=NOW() WHERE id=$1', [req.params.id]);
 
     res.json({ success: true, uploadUrl });
   } catch (err) {

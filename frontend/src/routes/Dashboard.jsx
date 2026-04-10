@@ -21,12 +21,18 @@ function StatCard({ icon: Icon, label, value, color }) {
 function StatusBadge({ status }) {
   const styles = {
     paid: 'bg-green-100 text-green-700',
-    unpaid: 'bg-gray-100 text-gray-600',
-    overdue: 'bg-red-100 text-red-600',
+    unpaid: 'bg-red-100 text-red-700',
+    pending_payment: 'bg-amber-100 text-amber-800',
+    partial: 'bg-orange-100 text-orange-700',
+    overdue: 'bg-red-200 text-red-800',
+    processing: 'bg-blue-100 text-blue-700',
+    pending: 'bg-yellow-100 text-yellow-700',
+    cancelled: 'bg-gray-100 text-gray-600',
   }
+  const label = status === 'pending_payment' ? '💳 Review' : status
   return (
     <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${styles[status] || styles.unpaid}`}>
-      {status}
+      {label}
     </span>
   )
 }
@@ -44,6 +50,7 @@ export default function Dashboard() {
   const paid = invoices.filter((i) => i.status === 'paid')
   const unpaid = invoices.filter((i) => i.status === 'unpaid')
   const overdue = invoices.filter((i) => i.status === 'overdue')
+  const pendingPayment = invoices.filter((i) => i.status === 'pending_payment')
 
   const totalRevenue = paid.reduce(
     (sum, inv) => sum + calculateTotal(inv.items, inv.tax_percentage),
@@ -81,6 +88,15 @@ export default function Dashboard() {
         <StatCard icon={CheckCircle} label="Paid" value={paid.length} color="bg-green-500" />
         <StatCard icon={Clock} label="Unpaid" value={unpaid.length} color="bg-yellow-500" />
         <StatCard icon={AlertTriangle} label="Overdue" value={overdue.length} color="bg-red-500" />
+        {pendingPayment.length > 0 && (
+          <div className="col-span-2 lg:col-span-4 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-center gap-3">
+            <span className="text-2xl">💳</span>
+            <div>
+              <p className="font-semibold text-amber-800">{pendingPayment.length} invoice{pendingPayment.length !== 1 ? 's' : ''} awaiting payment review</p>
+              <p className="text-sm text-amber-600">Clients have submitted payment receipts. Go to <a href="/dashboard/receipts" className="underline font-medium">Receipts</a> to approve.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Revenue */}

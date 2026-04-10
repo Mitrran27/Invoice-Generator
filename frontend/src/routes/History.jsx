@@ -15,29 +15,52 @@ const A4_W = 794
 const A4_H = 1123
 
 const ALL_STATUSES = [
-  { value: 'unpaid',     label: 'Unpaid',      bg: 'bg-red-100',     text: 'text-red-700' },
-  { value: 'paid',       label: 'Paid',        bg: 'bg-green-100',   text: 'text-green-700' },
-  { value: 'pending',    label: 'Pending',     bg: 'bg-yellow-100',  text: 'text-yellow-700' },
-  { value: 'partial',    label: 'Partial',     bg: 'bg-orange-100',  text: 'text-orange-700' },
-  { value: 'processing', label: 'Processing',  bg: 'bg-blue-100',    text: 'text-blue-700' },
-  { value: 'failed',     label: 'Failed',      bg: 'bg-red-200',     text: 'text-red-900' },
-  { value: 'cancelled',  label: 'Cancelled',   bg: 'bg-gray-100',    text: 'text-gray-600' },
-  { value: 'refunded',   label: 'Refunded',    bg: 'bg-purple-100',  text: 'text-purple-700' },
-  { value: 'expired',    label: 'Expired',     bg: 'bg-pink-100',    text: 'text-pink-700' },
-  { value: 'overdue',    label: 'Overdue',     bg: 'bg-red-100',     text: 'text-red-800' },
+  { value: 'unpaid',          label: 'Unpaid',           bg: 'bg-red-100',     text: 'text-red-700' },
+  { value: 'paid',            label: 'Paid',             bg: 'bg-green-100',   text: 'text-green-700' },
+  { value: 'pending',         label: 'Pending',          bg: 'bg-yellow-100',  text: 'text-yellow-700' },
+  { value: 'pending_payment', label: 'Pending Payment',  bg: 'bg-amber-100',   text: 'text-amber-800' },
+  { value: 'partial',         label: 'Partial',          bg: 'bg-orange-100',  text: 'text-orange-700' },
+  { value: 'processing',      label: 'Processing',       bg: 'bg-blue-100',    text: 'text-blue-700' },
+  { value: 'failed',          label: 'Failed',           bg: 'bg-red-200',     text: 'text-red-900' },
+  { value: 'cancelled',       label: 'Cancelled',        bg: 'bg-gray-100',    text: 'text-gray-600' },
+  { value: 'refunded',        label: 'Refunded',         bg: 'bg-purple-100',  text: 'text-purple-700' },
+  { value: 'expired',         label: 'Expired',          bg: 'bg-pink-100',    text: 'text-pink-700' },
+  { value: 'overdue',         label: 'Overdue',          bg: 'bg-red-100',     text: 'text-red-800' },
 ]
 
 const STATUS_MAP = Object.fromEntries(ALL_STATUSES.map(s => [s.value, s]))
 
-function StatusBadge({ status, partialPercentage }) {
+function StatusBadge({ status, partialPercentage, balanceAmount, currency }) {
   const s = STATUS_MAP[status] || STATUS_MAP['unpaid']
-  const label = status === 'partial' && partialPercentage
+  const isPendingPayment = status === 'pending_payment'
+  const isPartial = status === 'partial'
+  const label = isPartial && partialPercentage
     ? `Partial (${partialPercentage}%)`
     : s.label
+
+  if (isPendingPayment) {
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${s.bg} ${s.text} ring-1 ring-amber-400 animate-pulse`}>
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500" />
+        </span>
+        Review Payment
+      </span>
+    )
+  }
+
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${s.bg} ${s.text}`}>
-      {label}
-    </span>
+    <div className="flex flex-col items-center gap-0.5">
+      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${s.bg} ${s.text}`}>
+        {label}
+      </span>
+      {isPartial && balanceAmount !== undefined && (
+        <span className="text-[10px] text-orange-600 font-medium">
+          Balance: {currency}{Number(balanceAmount).toFixed(2)}
+        </span>
+      )}
+    </div>
   )
 }
 
@@ -52,7 +75,9 @@ function StatusDropdown({ invoice, onUpdate }) {
         onClick={() => setOpen(v => !v)}
         className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold transition-colors ${current.bg} ${current.text} hover:opacity-80`}
       >
-        {invoice.status === 'partial' && invoice.partial_percentage
+        {invoice.status === 'pending_payment'
+          ? '💳 Review Payment'
+          : invoice.status === 'partial' && invoice.partial_percentage
           ? `Partial (${invoice.partial_percentage}%)`
           : current.label}
         <ChevronDown className="h-3 w-3" />
@@ -362,6 +387,7 @@ export default function History() {
                   <th className={`${thCls} text-center`} onClick={() => handleSort('status')}>
                     <div className="flex items-center justify-center gap-1">Status <SortIcon field="status" sortField={sortField} sortDir={sortDir} /></div>
                   </th>
+                  <th className="px-4 py-3 text-center font-medium text-gray-500">Emails</th>
                   <th className="px-4 py-3 text-right font-medium text-gray-500">Actions</th>
                 </tr>
               </thead>
@@ -379,20 +405,65 @@ export default function History() {
                       {formatCurrency(calculateTotal(inv.items, inv.tax_percentage), currency)}
                     </td>
                     <td className="px-4 py-3 text-center">
+                      {/* Pending payment banner — sits above the dropdown */}
+                      {inv.status === 'pending_payment' && (
+                        <div className="mb-1.5 text-center">
+                          <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-300 text-amber-700 text-[10px] font-semibold px-2 py-0.5 rounded-md">
+                            💳 Receipt submitted — review now
+                          </span>
+                        </div>
+                      )}
                       <StatusDropdown invoice={inv} onUpdate={handleStatus} />
+                      {/* Balance for partial */}
+                      {inv.status === 'partial' && inv.amount_paid !== undefined && (
+                        <div className="text-[10px] text-orange-600 font-medium mt-0.5">
+                          Balance: {currency}{Math.max(0, calculateTotal(inv.items, inv.tax_percentage) - Number(inv.amount_paid || 0)).toFixed(2)}
+                        </div>
+                      )}
                       {/* Email reminder log indicators */}
                       <div className="flex items-center justify-center gap-1 mt-1">
                         {inv.email_sent_at_7day && (
-                          <span title={`7-day reminder sent: ${new Date(inv.email_sent_at_7day).toLocaleString()}`}
+                          <span title={`7-day reminder: ${new Date(inv.email_sent_at_7day).toLocaleString()}`}
                             className="w-2 h-2 rounded-full bg-blue-400 cursor-help" />
                         )}
                         {inv.email_sent_at_3day && (
-                          <span title={`3-day reminder sent: ${new Date(inv.email_sent_at_3day).toLocaleString()}`}
+                          <span title={`3-day reminder: ${new Date(inv.email_sent_at_3day).toLocaleString()}`}
                             className="w-2 h-2 rounded-full bg-yellow-400 cursor-help" />
                         )}
                         {inv.email_sent_at_1day && (
-                          <span title={`1-day reminder sent: ${new Date(inv.email_sent_at_1day).toLocaleString()}`}
+                          <span title={`1-day reminder: ${new Date(inv.email_sent_at_1day).toLocaleString()}`}
                             className="w-2 h-2 rounded-full bg-red-400 cursor-help" />
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <div className="flex flex-col items-center gap-0.5">
+                        {inv.invoice_sent_at && (
+                          <span title={`Invoice sent: ${new Date(inv.invoice_sent_at).toLocaleString()}`}
+                            className="inline-flex items-center gap-1 text-[10px] text-green-600 font-medium">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500" /> Sent
+                          </span>
+                        )}
+                        {inv.email_sent_at_7day && (
+                          <span title={`7-day reminder: ${new Date(inv.email_sent_at_7day).toLocaleString()}`}
+                            className="inline-flex items-center gap-1 text-[10px] text-blue-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> 7d
+                          </span>
+                        )}
+                        {inv.email_sent_at_3day && (
+                          <span title={`3-day reminder: ${new Date(inv.email_sent_at_3day).toLocaleString()}`}
+                            className="inline-flex items-center gap-1 text-[10px] text-yellow-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-yellow-400" /> 3d
+                          </span>
+                        )}
+                        {inv.email_sent_at_1day && (
+                          <span title={`1-day reminder: ${new Date(inv.email_sent_at_1day).toLocaleString()}`}
+                            className="inline-flex items-center gap-1 text-[10px] text-red-600">
+                            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> 1d
+                          </span>
+                        )}
+                        {!inv.invoice_sent_at && !inv.email_sent_at_7day && !inv.email_sent_at_3day && !inv.email_sent_at_1day && (
+                          <span className="text-[10px] text-gray-300">—</span>
                         )}
                       </div>
                     </td>

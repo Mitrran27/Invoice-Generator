@@ -116,8 +116,11 @@ async function sendInvoiceEmail({ to, clientName, invoiceNumber, dueDate, amount
   await transporter.sendMail(mailOpts);
 }
 
-async function sendPaymentReceivedEmail({ to, companyName, clientName, invoiceNumber, amountPaid, currency, receiptId, autoStatus }) {
+async function sendPaymentReceivedEmail({ to, companyName, clientName, invoiceNumber, amountPaid, currency, receiptId, autoStatus, detectedAmount }) {
   const formattedAmount = new Intl.NumberFormat('en-US', { style: 'currency', currency: currency || 'USD' }).format(amountPaid);
+  const detectedNote = detectedAmount !== null && detectedAmount !== undefined
+    ? `<p style="font-size:12px;color:#6b7280;margin-top:6px">🔍 Amount auto-detected from receipt image: <strong>${new Intl.NumberFormat('en-US',{style:'currency',currency:currency||'USD'}).format(detectedAmount)}</strong></p>`
+    : '';
   const statusLabel = autoStatus === 'approved' ? '✅ Payment Verified' : autoStatus === 'mismatch' ? '⚠️ Amount Mismatch' : '🔍 Under Review';
   const statusColor = autoStatus === 'approved' ? '#16a34a' : autoStatus === 'mismatch' ? '#d97706' : '#2563eb';
 
@@ -136,6 +139,7 @@ async function sendPaymentReceivedEmail({ to, companyName, clientName, invoiceNu
         <div style="background:#f9f9f9;border:1px solid #e0e0e0;border-left:4px solid ${statusColor};border-radius:6px;padding:20px;margin:20px 0">
           <p style="margin:0 0 8px"><span style="color:#888;font-size:12px;text-transform:uppercase">Amount Paid</span></p>
           <p style="font-size:24px;font-weight:bold;color:${statusColor};margin:0">${formattedAmount}</p>
+          ${detectedNote}
           <p style="margin:12px 0 4px"><span style="font-size:12px;font-weight:600;background:${statusColor};color:#fff;padding:3px 10px;border-radius:12px">${statusLabel}</span></p>
         </div>
         <p style="font-size:13px;color:#6b7280">Please log in to your Invoice Generator dashboard to review and approve or reject this receipt.</p>

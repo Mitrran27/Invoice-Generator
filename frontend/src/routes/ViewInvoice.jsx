@@ -12,10 +12,11 @@ const A4_W = 794
 const A4_H = 1123
 const STATUS_COLORS = {
   paid: 'bg-green-100 text-green-700', unpaid: 'bg-red-100 text-red-700',
-  pending: 'bg-yellow-100 text-yellow-700', partial: 'bg-orange-100 text-orange-700',
-  processing: 'bg-blue-100 text-blue-700', failed: 'bg-red-200 text-red-900',
-  cancelled: 'bg-gray-100 text-gray-600', refunded: 'bg-purple-100 text-purple-700',
-  expired: 'bg-pink-100 text-pink-700', overdue: 'bg-red-100 text-red-800',
+  pending: 'bg-yellow-100 text-yellow-700', pending_payment: 'bg-amber-100 text-amber-800',
+  partial: 'bg-orange-100 text-orange-700', processing: 'bg-blue-100 text-blue-700',
+  failed: 'bg-red-200 text-red-900', cancelled: 'bg-gray-100 text-gray-600',
+  refunded: 'bg-purple-100 text-purple-700', expired: 'bg-pink-100 text-pink-700',
+  overdue: 'bg-red-100 text-red-800',
 }
 
 export default function ViewInvoice() {
@@ -83,7 +84,9 @@ export default function ViewInvoice() {
     </div>
   )
 
-  const statusLabel = invoice.status === 'partial' && invoice.partial_percentage
+  const statusLabel = invoice.status === 'pending_payment'
+    ? '💳 Pending Payment Review'
+    : invoice.status === 'partial' && invoice.partial_percentage
     ? `Partial (${invoice.partial_percentage}%)`
     : invoice.status
 
@@ -118,6 +121,19 @@ export default function ViewInvoice() {
           </button>
         </div>
       </div>
+
+      {/* Pending payment review banner */}
+      {invoice.status === 'pending_payment' && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex items-start gap-3">
+          <span className="text-2xl">💳</span>
+          <div>
+            <p className="font-semibold text-amber-800">Client has submitted a payment receipt</p>
+            <p className="text-sm text-amber-700 mt-0.5">
+              Review the receipt in the <a href="/dashboard/receipts" className="underline font-medium">Receipts page</a> and approve or reject it. The invoice will be marked as <strong>Paid</strong> only after your approval.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Meta cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">

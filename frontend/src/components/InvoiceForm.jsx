@@ -163,6 +163,7 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
   const subtotal = items.reduce((s, i) => s + Number(i.rate)*Number(i.quantity), 0)
   const tax = subtotal * (Number(form.taxPercentage)/100)
   const total = subtotal + tax
+  const currency = settings?.default_currency || 'USD'
 
   const inputCls = 'w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent'
   const labelCls = 'block text-sm font-medium text-gray-700 mb-1.5'
@@ -209,20 +210,17 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
             </div>
             <div>
               <label className={labelCls}>Status</label>
-              <select className={inputCls} value={form.status} onChange={set('status')}>
-                {ALL_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-              </select>
-            </div>
-            {form.status === 'partial' && (
-              <div>
-                <label className={labelCls}>Partial Payment (%)</label>
-                <div className="flex items-center gap-2">
-                  <input type="number" min="1" max="99" className="w-24 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
-                    value={form.partialPercentage} onChange={set('partialPercentage')} />
-                  <span className="text-sm text-gray-500">% paid so far</span>
+              {initial?.id ? (
+                <select className={inputCls} value={form.status} onChange={set('status')}>
+                  {ALL_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                </select>
+              ) : (
+                <div className={`${inputCls} bg-gray-50 text-gray-500 cursor-not-allowed flex items-center gap-2`}>
+                  <span className="inline-block w-2 h-2 rounded-full bg-red-400" />
+                  Unpaid (set automatically)
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Items */}
@@ -244,7 +242,7 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
                   <input type="number" className={`col-span-3 ${inputCls}`} value={item.rate} onChange={(e) => updateItem(item.id,'rate',parseFloat(e.target.value)||0)} min="0" step="0.01" />
                   <input type="number" className={`col-span-2 ${inputCls}`} value={item.quantity} onChange={(e) => updateItem(item.id,'quantity',parseInt(e.target.value)||1)} min="1" />
                   <div className="col-span-2 flex items-center justify-end gap-1">
-                    <span className="text-xs font-medium text-gray-700">${(Number(item.rate)*Number(item.quantity)).toFixed(2)}</span>
+                    <span className="text-xs font-medium text-gray-700">{currency}{(Number(item.rate)*Number(item.quantity)).toFixed(2)}</span>
                     <button type="button" onClick={() => removeItem(item.id)} disabled={items.length===1} className="p-1 rounded text-gray-300 hover:text-red-500 disabled:opacity-30">
                       <Trash2 className="h-3.5 w-3.5" />
                     </button>
@@ -253,7 +251,7 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
               ))}
             </div>
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5 text-sm">
-              <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>${subtotal.toFixed(2)}</span></div>
+              <div className="flex justify-between text-gray-500"><span>Subtotal</span><span>{currency}{subtotal.toFixed(2)}</span></div>
               <div className="flex items-center justify-between text-gray-500">
                 <div className="flex items-center gap-2"><span>Tax</span>
                   <div className="flex items-center gap-1">
@@ -262,9 +260,9 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
                     <span className="text-xs">%</span>
                   </div>
                 </div>
-                <span>${tax.toFixed(2)}</span>
+                <span>{currency}{tax.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100"><span>Total</span><span>${total.toFixed(2)}</span></div>
+              <div className="flex justify-between font-bold text-gray-900 text-base pt-1 border-t border-gray-100"><span>Total</span><span>{currency}{total.toFixed(2)}</span></div>
             </div>
           </div>
 
