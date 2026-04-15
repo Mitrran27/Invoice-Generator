@@ -67,9 +67,12 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
       windowWidth: A4_W, windowHeight: A4_H,
       logging: false,
       onclone: (doc) => {
-        // Ensure all inline styles are preserved in clone
-        const el = doc.querySelector('[data-invoice-preview]')
-        if (el) el.style.transform = 'none'
+        // Reset the scale(0.60) wrapper so the PDF captures at full A4 size
+        const wrapper = doc.querySelector('[data-scale-wrapper]')
+        if (wrapper) {
+          wrapper.style.transform = 'none'
+          wrapper.style.transformOrigin = 'top left'
+        }
       },
     })
   }
@@ -306,7 +309,7 @@ export default function InvoiceForm({ initial = null, onSubmit, submitLabel = 'S
             </div>
             <div className="bg-gray-100 flex items-start justify-center p-3"
               style={{ height: `${Math.round(A4_H * PREVIEW_SCALE) + 24}px`, overflow: 'hidden' }}>
-              <div style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top center', width: `${A4_W}px`, flexShrink: 0 }}>
+              <div data-scale-wrapper style={{ transform: `scale(${PREVIEW_SCALE})`, transformOrigin: 'top center', width: `${A4_W}px`, flexShrink: 0 }}>
                 <InvoicePreview ref={printRef}
                   clientName={form.clientName} clientEmail={form.clientEmail} clientAddress={form.clientAddress}
                   invoiceNumber={form.invoiceNumber} issueDate={form.issueDate} dueDate={form.dueDate}
