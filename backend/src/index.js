@@ -17,9 +17,18 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '20mb' })); // Larger for PDF base64
 
-const limiter = rateLimit({ windowMs: 15*60*1000, max: 200, message: { error: 'Too many requests' } });
+const isDev = process.env.NODE_ENV !== 'production';
+
+// General API rate limit — generous for development, tighter in production
+const limiter = rateLimit({ windowMs: 15*60*1000, max: isDev ? 2000 : 200, message: { error: 'Too many requests, please try again later' },
+  skip: (req) => isDev && (req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1'),
+});
 app.use('/api', limiter);
-const authLimiter = rateLimit({ windowMs: 15*60*1000, max: 20, message: { error: 'Too many login attempts' } });
+
+// Auth rate limit — relaxed in dev so refreshing/testing doesn't lock you out
+const authLimiter = rateLimit({ windowMs: 15*60*1000, max: isDev ? 500 : 20, message: { error: 'Too many login attempts, please try again later' },
+  skip: (req) => isDev && (req.ip === '127.0.0.1' || req.ip === '::1' || req.ip === '::ffff:127.0.0.1'),
+});
 
 const swaggerDoc = YAML.load(path.join(__dirname, 'docs/api.yaml'));
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDoc));
@@ -43,6 +52,7 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 API running on http://localhost:${PORT}`);
   console.log(`📖 Swagger docs at http://localhost:${PORT}/api-docs`);
+  if (isDev) console.log(`🔧 Dev mode — rate limits relaxed for localhost`);
   startReminderJob();
 });
 
